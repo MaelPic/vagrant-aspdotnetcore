@@ -1,0 +1,50 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+Vagrant.configure(2) do |config|
+
+  config.vm.box = "ubuntu/trusty64"
+  config.vm.hostname = "DotNetCoreBaseBox"
+
+  # Forwarded port mapping host and guest machines 
+  # - host is the machine on which you run "vagrant up"
+  #   Default port here is 8080, which means the api will be accessible from http://localhost:8080/
+  # - guest is the box described in this file
+  #   Default port for DotNet applications is usually 32768
+  #   Port inside the Docker container is 80
+  config.vm.network "forwarded_port", guest: 32768, host: 8080
+
+  # Shared drive between the host and the guest machines.
+  # It is here considered that the code with your solution (.sln) is in a folder called "src"
+  # and that the Vagrantfile is in the parent folder of "src".
+  config.vm.synced_folder "./src", "/vagrant/src"
+
+  # Provisioning with shell script.
+  config.vm.provision "shell", inline: <<-SHELL
+    echo -e "\n\n---------- Starting Provision of this VM ----------\n\n"
+    sudo apt-get update
+
+    echo -e "\n\n---------- Installing GIT ----------\n\n"
+    sudo apt-get install -y git vim
+
+    echo -e "\n\n---------- Cloning docker-install ----------\n\n"
+    git clone https://github.com/docker/docker-install.git
+    
+    echo -e "\n\n---------- Installing Docker ----------\n\n"
+    sh docker-install/install.sh
+    
+    echo -e "\n\n---------- Installing Docker-compose ----------\n\n"
+    sudo curl -L https://github.com/docker/compose/releases/download/1.17.0/docker-compose-`uname -s`-`uname -m` -o /usr/local/bin/docker-compose
+    sudo chmod +x /usr/local/bin/docker-compose
+    
+    echo -e "\n\n---------- Building the ASP project ----------\n\n"
+    cd /vagrant/src
+    sudo docker-compose -f docker-compose.ci.build.yml up
+    
+    echo -e "\n\n---------- Running ASP application ----------\n\n"
+    sudo docker-compose up -d
+    
+    echo -e "\n\n---------- Checking Docker image running ----------\n\n"
+    sudo docker ps
+  SHELL
+end
